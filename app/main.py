@@ -4,25 +4,41 @@ from fastapi import FastAPI
 from fastapi.responses import StreamingResponse, HTMLResponse
 from app.camera import Camera
 from app.detector import CatDetector
-
+from fastapi.middleware.cors import CORSMiddleware
 from app.mqtt_client import connect
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 connect() 
 camera = Camera()
 detector = CatDetector()
 
-
 def generate_frames():
     while True:
         frame = camera.get_frame()
         if frame is None:
-            break
+            continue
 
         frame = detector.detect(frame)
 
-        _, buffer = cv2.imencode(".jpg", frame)
+        # Resolusi streaming kecil → super smooth
+        frame = cv2.resize(frame, (480, 270))
+
+        _, buffer = cv2.imencode(
+            ".jpg",
+            frame,
+            [cv2.IMWRITE_JPEG_QUALITY, 55]  # lebih kecil = lebih smooth
+        )
+
         frame_bytes = buffer.tobytes()
 
         yield (
