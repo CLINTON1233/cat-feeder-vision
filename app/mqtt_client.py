@@ -1,4 +1,5 @@
 import paho.mqtt.client as mqtt
+import time
 
 BROKER = "broker.hivemq.com"
 PORT = 1883
@@ -10,6 +11,10 @@ client = mqtt.Client(
     client_id="raspberry_cat_detector_001",
     protocol=mqtt.MQTTv311
 )
+
+# NEW: Cooldown tracking
+last_feed_time = 0
+FEED_COOLDOWN = 15  # detik
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
@@ -29,6 +34,10 @@ def on_message(client, userdata, msg):
 
     if topic == TOPIC_STATUS:
         print(f"🦾 ESP32 STATUS → {payload}")
+        
+        # NEW: Log cooldown status
+        if "COOLDOWN" in payload:
+            print(f"⏰ ESP32 dalam cooldown: {payload}")
 
 def connect():
     client.on_connect = on_connect
@@ -42,6 +51,18 @@ def connect():
     print("🚀 MQTT LOOP STARTED, RASPBERRY ONLINE")
 
 def send_feed(source):
+    global last_feed_time
+    
+    # NEW: Check cooldown
+    current_time = time.time()
+    if current_time - last_feed_time < FEED_COOLDOWN:
+        remaining = FEED_COOLDOWN - (current_time - last_feed_time)
+        print(f"⏰ Skipping feed request. Cooldown: {remaining:.1f}s remaining")
+        return
+    
     print(f"📡 SEND MQTT TO ESP32 → {source}")
     client.publish(TOPIC_FEED, source)
     client.publish(TOPIC_STATUS, f"{source} DETECTED BY CAMERA")
+    
+    # Update last feed time
+    last_feed_time = current_time
