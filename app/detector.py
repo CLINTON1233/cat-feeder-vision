@@ -20,10 +20,14 @@ class CatDetector:
         self.detect_interval = 5
         self.box_timeout = 15
         
-        # ⚡ PERUBAHAN: Struktur data untuk multiple boxes
-        # Format: {id: (label, color, conf, x1,y1,x2,y2, age, track_id)}
+        # Tracking variables
         self.tracked_boxes = {}
         self.next_track_id = 0
+        
+        # NEW: State tracking
+        self.last_detection_state = {"cat": False, "person": False}
+        self.current_detection_state = {"cat": False, "person": False}
+        self.new_detection_flag = {"cat": False, "person": False}
         
         self.class_names = self.model.names
         
@@ -125,28 +129,47 @@ class CatDetector:
             # Update tracked boxes dengan track ID
             self.tracked_boxes = self._assign_track_ids(current_detections)
             
-            # ===== MQTT LOGIC =====
+            # ===== NEW: Update detection states =====
+            self.current_detection_state = {"cat": False, "person": False}
+            
+            for box_data in self.tracked_boxes.values():
+                label = box_data[0]
+                if label == "cat":
+                    self.current_detection_state["cat"] = True
+                elif label == "person":
+                    self.current_detection_state["person"] = True
+            
+            # ===== NEW: Check for NEW detections =====
+            self.new_detection_flag = {"cat": False, "person": False}
+            
+            # Check for NEW cat detection
+            if self.current_detection_state["cat"] and not self.last_detection_state["cat"]:
+                self.new_detection_flag["cat"] = True
+                print("🐱 NEW CAT DETECTED!")
+            
+            # Check for NEW person detection
+            if self.current_detection_state["person"] and not self.last_detection_state["person"]:
+                self.new_detection_flag["person"] = True
+                print("🧍 NEW PERSON DETECTED!")
+            
+            # ===== NEW: MQTT Logic hanya untuk DETECTION BARU =====
             now = time.time()
-            if now - self.last_send > 5:
-                cat_count = 0
-                person_count = 0
-                
-                for box_data in self.tracked_boxes.values():
-                    label = box_data[0]
-                    if label == "cat":
-                        cat_count += 1
-                    elif label == "person":
-                        person_count += 1
-                
-                # Kirim MQTT jika ada deteksi
-                if cat_count > 0:
-                    print(f"🐱 {cat_count} CAT(S) DETECTED → SEND MQTT")
+            
+            # Kirim MQTT hanya jika ada DETECTION BARU
+            if self.new_detection_flag["cat"]:
+                if now - self.last_send > 5:  # Minimal 5 detik antar pengiriman
+                    print(f"🐱 NEW CAT DETECTED → SEND MQTT")
                     send_feed("CAT")
                     self.last_send = now
-                elif person_count > 0:
-                    print(f"🧍 {person_count} PERSON(S) DETECTED → SEND MQTT")
+            
+            elif self.new_detection_flag["person"]:
+                if now - self.last_send > 5:  # Minimal 5 detik antar pengiriman
+                    print(f"🧍 NEW PERSON DETECTED → SEND MQTT")
                     send_feed("PERSON")
                     self.last_send = now
+            
+            # Update last detection state untuk frame berikutnya
+            self.last_detection_state = self.current_detection_state.copy()
         
         # ===== DRAW ALL BOXES (SETIAP FRAME) =====
         for track_id, (label, color, conf, x1, y1, x2, y2, age, tid) in self.tracked_boxes.items():
@@ -164,20 +187,42 @@ class CatDetector:
                 color,
                 2
             )
-            
-            # Tambahan: tampilkan jumlah total objek
-            cat_count = sum(1 for data in self.tracked_boxes.values() if data[0] == "cat")
-            person_count = sum(1 for data in self.tracked_boxes.values() if data[0] == "person")
-            
-            if cat_count > 0 or person_count > 0:
-                cv2.putText(
-                    frame,
-                    f"Cats: {cat_count} | Persons: {person_count}",
-                    (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.8,
-                    (255, 255, 255),
-                    2
-                )
+        
+        # NEW: Tampilkan status deteksi
+        cat_count = sum(1 for data in self.tracked_boxes.values() if data[0] == "cat")
+        person_count = sum(1 for data in self.tracked_boxes.values() if data[0] == "person")
+        
+        status_text = f"Cats: {cat_count} | Persons: {person_count}"
+        
+        # Warna berbeda untuk deteksi baru
+        if self.new_detection_flag["cat"] or self.new_detection_flag["person"]:
+            cv2.putText(
+                frame,
+                "NEW DETECTION!",
+                (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (0, 255, 255),  # Kuning untuk deteksi baru
+                2
+            )
+            cv2.putText(
+                frame,
+                status_text,
+                (10, 60),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (255, 255, 255),
+                2
+            )
+        else:
+            cv2.putText(
+                frame,
+                status_text,
+                (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (255, 255, 255),
+                2
+            )
         
         return frame
