@@ -103,7 +103,7 @@ class CatDetector:
             results = self.model(
                 frame,
                 conf=0.5,
-                imgsz=320,
+                imgsz=320, 
                 device="cpu",
                 verbose=False,
                 half=False
