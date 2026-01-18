@@ -1,6 +1,6 @@
 import paho.mqtt.client as mqtt
 
-BROKER = "broker.hivemq.com"
+BROKER = "broker.emqx.io"
 PORT = 1883
 
 TOPIC_FEED = "cat/feeding"
