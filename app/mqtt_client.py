@@ -6,20 +6,27 @@ PORT = 1883
 TOPIC_FEED = "cat/feeding"
 TOPIC_STATUS = "cat/status"
 
+# Ini sekarang dipakai sebagai STATUS ESP32 / MQTT
+cooldown_remaining = "MQTT CONNECTED"
+
 client = mqtt.Client(
     client_id="raspberry_cat_detector_001",
     protocol=mqtt.MQTTv311
 )
 
 def on_connect(client, userdata, flags, rc):
+    global cooldown_remaining
     if rc == 0:
         print("🟢 MQTT CONNECTED (RASPBERRY)")
+        cooldown_remaining = "MQTT CONNECTED"
         client.subscribe(TOPIC_STATUS)
         print(f"📥 SUBSCRIBED TO {TOPIC_STATUS}")
     else:
+        cooldown_remaining = "MQTT FAILED"
         print("🔴 MQTT CONNECT FAILED", rc)
 
 def on_message(client, userdata, msg):
+    global cooldown_remaining
     topic = msg.topic
     payload = msg.payload.decode()
 
@@ -27,8 +34,10 @@ def on_message(client, userdata, msg):
     print("   Topic :", topic)
     print("   Data  :", payload)
 
+    # Semua pesan dari ESP32 kita tampilkan sebagai status
     if topic == TOPIC_STATUS:
-        print(f"🦾 ESP32 STATUS → {payload}")
+        cooldown_remaining = payload
+        print(f"📡 ESP32 STATUS UPDATED → {cooldown_remaining}")
 
 def connect():
     client.on_connect = on_connect
