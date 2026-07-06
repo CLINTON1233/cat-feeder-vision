@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.camera import Camera
 from app.detector import CatDetector
 from app.mqtt_client import connect
-import app.mqtt_client as mqtt_client  # PENTING: ambil status realtime dari modul
+import app.mqtt_client as mqtt_client 
 
 app = FastAPI()
 
